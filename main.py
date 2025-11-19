@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-app = FastAPI(title="BloomBox API", version="1.0.0")
+app = FastAPI(title="BloomBox API", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -103,6 +103,9 @@ FEATURED_BOXES = [
             "Mini dried bouquet",
         ],
         "mood": "happy",
+        "occasions": ["birthday", "graduation"],
+        "relationships": ["for her", "friends"],
+        "description": "A bright, cheerful curation to lift the spirits with rosy notes and sweet treats.",
     },
     {
         "slug": "calm-box",
@@ -112,6 +115,9 @@ FEATURED_BOXES = [
         "gradient": ["#B9F3E4", "#E8DFF5"],
         "items": ["Lavender mist", "Chamomile tea", "Satin scrunchie", "Journaling pen"],
         "mood": "calm",
+        "occasions": ["self-love", "anniversary"],
+        "relationships": ["for her", "parents"],
+        "description": "Soft, soothing essentials designed to unwind and slow down with gentle comfort.",
     },
     {
         "slug": "love-box",
@@ -121,6 +127,9 @@ FEATURED_BOXES = [
         "gradient": ["#FFD6E0", "#F4D9B3"],
         "items": ["Silk ribbon", "Chocolate truffles", "Rose oil", "Polaroid frame"],
         "mood": "romantic",
+        "occasions": ["anniversary", "birthday"],
+        "relationships": ["for her"],
+        "description": "Tender, rosy, love-forward pieces that feel like a handwritten poem.",
     },
     {
         "slug": "celebration-box",
@@ -130,6 +139,9 @@ FEATURED_BOXES = [
         "gradient": ["#FFF7E9", "#F4D9B3"],
         "items": ["Confetti popper", "Sparkle topper", "Vanilla cupcake mix", "Note card"],
         "mood": "festive",
+        "occasions": ["graduation", "birthday"],
+        "relationships": ["friends", "parents", "for him"],
+        "description": "A party-in-a-box with shimmering accents and sweet celebration energy.",
     },
 ]
 
@@ -146,6 +158,49 @@ def get_categories():
         "relationships": ["for him", "for her", "parents", "friends"],
         "occasions": ["birthday", "anniversary", "graduation", "self-love"],
     }
+
+
+@app.get("/api/category/{ctype}/{key}")
+def get_category_listing(ctype: str, key: str):
+    """Return boxes for a given category type and key.
+    ctype: moods | occasions | relationships
+    """
+    ctype = ctype.lower()
+    key = key.lower()
+    if ctype not in {"moods", "occasions", "relationships"}:
+        raise HTTPException(status_code=400, detail="Invalid category type")
+
+    def matches(b):
+        if ctype == "moods":
+            return (b.get("mood") or "").lower() == key
+        if ctype == "occasions":
+            return key in [o.lower() for o in b.get("occasions", [])]
+        if ctype == "relationships":
+            return key in [r.lower() for r in b.get("relationships", [])]
+        return False
+
+    results = [b for b in FEATURED_BOXES if matches(b)]
+    return {"category": {"type": ctype, "key": key}, "results": results}
+
+
+@app.get("/api/box/{slug}")
+def get_box(slug: str):
+    for b in FEATURED_BOXES:
+        if b["slug"] == slug:
+            # Add more imagery and details for product page
+            return {
+                **b,
+                "gallery": [
+                    b["thumb"],
+                    "https://images.unsplash.com/photo-1519681393784-d120267933ba?q=80&w=1200&auto=format&fit=crop",
+                    "https://images.unsplash.com/photo-1519682577862-22b62b24e493?q=80&w=1200&auto=format&fit=crop",
+                ],
+                "ribbonOptions": ["Blush Pink", "Sage Green", "Champagne"],
+                "estimated_delivery": "3–5 days",
+                "rating": 4.9,
+                "reviews": 128,
+            }
+    raise HTTPException(status_code=404, detail="Box not found")
 
 
 @app.post("/api/recommend-gifts")
