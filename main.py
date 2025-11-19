@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from typing import List, Optional
 
-app = FastAPI(title="BloomBox API", version="1.1.0")
+app = FastAPI(title="BloomBox API", version="1.2.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -280,6 +280,50 @@ def generate_message(req: MessageRequest):
     message = f"{to_line}\n{style_line}{mood_line}{from_line}"
 
     return {"message": message}
+
+
+# --- Orders & payments (mock payment + email hooks) ---
+from schemas import Order
+from database import create_document
+
+class CreateOrderRequest(Order):
+    pass
+
+@app.post('/api/orders')
+def create_order(req: CreateOrderRequest):
+    # In a real system, create payment intent with Razorpay/Stripe and return client secret/order id.
+    # Here, we persist the order and return a mock payment reference.
+    try:
+        payment_ref = f"PAY-{os.urandom(4).hex()}"
+        order_id = create_document('order', { **req.model_dump(), 'payment_ref': payment_ref, 'status': 'created' })
+        return { 'order_id': order_id, 'payment_ref': payment_ref, 'amount': req.amount, 'currency': req.currency }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class ConfirmPaymentRequest(BaseModel):
+    order_id: str
+    payment_ref: str
+    provider: Optional[str] = 'mock'
+    success: bool = True
+
+@app.post('/api/orders/confirm')
+def confirm_payment(req: ConfirmPaymentRequest):
+    # Here we would verify signature/webhook; we just echo success.
+    try:
+        # In real usage, update DB document status to 'paid'
+        return { 'status': 'paid' if req.success else 'failed', 'order_id': req.order_id, 'payment_ref': req.payment_ref }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+class EmailRequest(BaseModel):
+    to: str
+    subject: str
+    html: str
+
+@app.post('/api/send-email')
+def send_email(req: EmailRequest):
+    # Placeholder: integrate with transactional email (Resend, SendGrid, SES). We just return success.
+    return { 'status': 'queued' }
 
 
 if __name__ == "__main__":
